@@ -3919,3 +3919,43 @@ Stack Trace:    at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(Stri
    at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
    at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
    at MessageBroker.Consumer.App.DefaultConsumer.StartPollingAsync(CancellationToken cancellationToken) in /home/sysiphux/workspace/work/sg/final-proj/MessageBroker/MessageBroker.Consumer.App/DefaultConsumer.cs:line 122
+2025-02-11 19:29:49 [INFO] Starting consumer application at 2025-02-11 19:29:49
+2025-02-11 19:29:49 [INFO] User: sysiphux
+2025-02-11 19:29:49 [INFO] Broker URL: http://localhost:5000
+2025-02-11 19:29:49 [INFO] Topic: test-topic
+2025-02-11 19:29:49 [INFO] Group: test-group
+2025-02-11 19:29:49 [INFO] Creating consumer instance
+2025-02-11 19:29:49 [INFO] Consumer initialized with broker URL: http://localhost:5000, topic: test-topic, group: test-group, id: aloh-a4f222e7-add5-4a9e-9e2f-eb0f20fb8ce4
+2025-02-11 19:29:49 [INFO] Checking connection to broker...
+2025-02-11 19:29:49 [INFO] Checking connection to broker at http://localhost:5000
+2025-02-11 19:29:49 [INFO] Successfully connected to message broker at http://localhost:5000
+2025-02-11 19:29:49 [INFO] Health check response: {"status":"healthy","timestamp":"2025-02-11T19:29:49.5325526Z","version":"1.0.0"}
+2025-02-11 19:29:49 [INFO] Successfully connected to broker
+2025-02-11 19:29:49 [INFO] Registering consumer with broker...
+2025-02-11 19:29:49 [INFO] Registering consumer aloh-a4f222e7-add5-4a9e-9e2f-eb0f20fb8ce4 for topic test-topic in group test-group
+2025-02-11 19:29:49 [INFO] Consumer aloh-a4f222e7-add5-4a9e-9e2f-eb0f20fb8ce4 successfully registered
+2025-02-11 19:29:49 [INFO] Consumer registered successfully
+2025-02-11 19:29:49 [INFO] Starting to poll for messages...
+2025-02-11 19:29:49 [INFO] Starting to poll for messages...
+2025-02-11 19:30:02 [ERROR] Error while polling messages: Connection refused (localhost:5000)
+Exception: HttpRequestException: Connection refused (localhost:5000)
+Stack Trace:    at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.CreateHttp11ConnectionAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.InjectNewHttp11ConnectionAsync(QueueItem queueItem)
+   at System.Threading.Tasks.TaskCompletionSourceWithCancellation`1.WaitWithCancellationAsync(CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+   at MessageBroker.Consumer.App.DefaultConsumer.StartPollingAsync(CancellationToken cancellationToken) in /home/sysiphux/workspace/work/sg/final-proj/MessageBroker/MessageBroker.Consumer.App/DefaultConsumer.cs:line 122
+2025-02-11 19:30:03 [ERROR] Error while polling messages: Connection refused (localhost:5000)
+Exception: HttpRequestException: Connection refused (localhost:5000)
+Stack Trace:    at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.ConnectAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.CreateHttp11ConnectionAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.InjectNewHttp11ConnectionAsync(QueueItem queueItem)
+   at System.Threading.Tasks.TaskCompletionSourceWithCancellation`1.WaitWithCancellationAsync(CancellationToken cancellationToken)
+   at System.Net.Http.HttpConnectionPool.SendWithVersionDetectionAndRetryAsync(HttpRequestMessage request, Boolean async, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, Boolean async, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+   at MessageBroker.Consumer.App.DefaultConsumer.StartPollingAsync(CancellationToken cancellationToken) in /home/sysiphux/workspace/work/sg/final-proj/MessageBroker/MessageBroker.Consumer.App/DefaultConsumer.cs:line 122
