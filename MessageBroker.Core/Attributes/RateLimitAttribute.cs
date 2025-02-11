@@ -3,7 +3,7 @@ namespace MessageBroker.Core.Attributes
     [AttributeUsage(AttributeTargets.Class)]
     public class RateLimitAttribute : Attribute
     {
-        public int ConcurrentThreads { get; }
+        public int ConcurrentThreads { get; set; }
 
         public RateLimitAttribute(int concurrentThreads)
         {

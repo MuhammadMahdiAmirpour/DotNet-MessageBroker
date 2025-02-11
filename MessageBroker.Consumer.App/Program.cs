@@ -1,129 +1,165 @@
-﻿using System.CommandLine;
+﻿using MessageBroker.Core.Interfaces;
 using MessageBroker.Logging;
+using System.CommandLine;
+using System.Reflection;
 
-namespace MessageBroker.Consumer.App;
-
-internal static class Program
+namespace MessageBroker.Consumer.App
 {
-    static async Task<int> Main(string[] args)
+    internal static class Program
     {
-        var topicOption = new Option<string>(
-            "--topic",
-            getDefaultValue: () => "test-topic",
-            description: "The topic to consume messages from"
-        );
-
-        var groupOption = new Option<string>(
-            "--group",
-            getDefaultValue: () => "test-group",
-            description: "The consumer group name"
-        );
-
-        var urlOption = new Option<string>(
-            "--url",
-            getDefaultValue: () => "http://localhost:5000",
-            description: "The message broker URL"
-        );
-
-        var rootCommand = new RootCommand("Message Broker Consumer Application")
+        static async Task<int> Main(string[] args)
         {
-            topicOption,
-            groupOption,
-            urlOption
-        };
+            var topicOption = new Option<string>(
+                "--topic",
+                getDefaultValue: () => "test-topic",
+                description: "The topic to consume messages from"
+            );
 
-        rootCommand.SetHandler(async (string topic, string group, string url) =>
-        {
-            await RunConsumer(topic, group, url);
-        }, topicOption, groupOption, urlOption);
+            var groupOption = new Option<string>(
+                "--group",
+                getDefaultValue: () => "test-group",
+                description: "The consumer group name"
+            );
 
-        return await rootCommand.InvokeAsync(args);
-    }
+            var urlOption = new Option<string>(
+                "--url",
+                getDefaultValue: () => "http://localhost:5000",
+                description: "The message broker URL"
+            );
 
-    static async Task RunConsumer(string topic, string group, string brokerUrl)
-    {
-        var startTime = DateTime.UtcNow;
-        var currentUser = Environment.UserName;
-
-        // Setup logger
-        IMyCustomLogger logger = new MyCustomLogger("consumer.log", MyCustomLogLevel.Info);
-        logger.LogInfo($"Starting consumer application at {startTime:yyyy-MM-dd HH:mm:ss}");
-        logger.LogInfo($"User: {currentUser}");
-        logger.LogInfo($"Broker URL: {brokerUrl}");
-        logger.LogInfo($"Topic: {topic}");
-        logger.LogInfo($"Group: {group}");
-
-        DefaultConsumer? consumer = null;
-
-        try
-        {
-            // Create consumer instance
-            logger.LogInfo("Creating consumer instance");
-            consumer = new DefaultConsumer(logger, topic, group, brokerUrl);
-
-            // Subscribe to message events
-            consumer.OnMessageReceived += (sender, message) =>
+            var rootCommand = new RootCommand("Message Broker Consumer Application")
             {
-                var content = System.Text.Encoding.UTF8.GetString(message.Payload);
-                Console.WriteLine($"\nReceived message on topic '{message.Topic}':");
-                Console.WriteLine($"ID: {message.Id}");
-                Console.WriteLine($"Content: {content}");
-                Console.WriteLine($"Timestamp: {message.Timestamp:yyyy-MM-dd HH:mm:ss}");
-                Console.WriteLine("----------------------------------------");
+                topicOption,
+                groupOption,
+                urlOption
             };
 
-            // Check connection before attempting to register
-            logger.LogInfo("Checking connection to broker...");
-            if (!await consumer.IsConnectedAsync())
+            rootCommand.SetHandler(async (topic, group, url) =>
             {
-                throw new Exception($"Failed to connect to message broker at {brokerUrl}");
-            }
+                await RunConsumer(topic, group, url);
+            }, topicOption, groupOption, urlOption);
 
-            logger.LogInfo("Successfully connected to broker");
-
-            // Register consumer with broker
-            logger.LogInfo("Registering consumer with broker...");
-            if (!await consumer.RegisterAsync())
-            {
-                throw new Exception("Failed to register consumer with broker");
-            }
-
-            logger.LogInfo("Consumer registered successfully");
-            logger.LogInfo("Starting to poll for messages...");
-
-            // Set up cancellation token to handle application shutdown
-            using var cts = new CancellationTokenSource();
-            Console.CancelKeyPress += (s, e) =>
-            {
-                e.Cancel = true;
-                cts.Cancel();
-                logger.LogInfo("Shutdown requested by user");
-            };
-
-            // Start polling for messages
-            await consumer.StartPollingAsync(cts.Token);
+            return await rootCommand.InvokeAsync(args);
         }
-        catch (Exception ex)
+
+        static async Task RunConsumer(string topic, string group, string brokerUrl)
         {
-            logger.LogError($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Consumer error: {ex.Message}", ex);
-            logger.LogError($"Fatal error at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}\nError: {ex.Message}", ex);
-            Environment.ExitCode = 1;
-        }
-        finally
-        {
-            if (consumer != null)
+            var startTime = DateTime.UtcNow;
+            var currentUser = "MuhammadMahdiAmirpour";
+            IConsumer? consumer = null;
+            IMyCustomLogger? logger = null;
+
+            try
             {
+                // Create logs directory if it doesn't exist
+                var logsDir = Path.Combine(AppContext.BaseDirectory, "logs");
+                Directory.CreateDirectory(logsDir);
+
+                // Setup logger
+                var logFileName = $"consumer_{currentUser}_{startTime:yyyyMMdd}.log";
+                var logPath = Path.Combine(logsDir, logFileName);
+                
+                logger = new MyCustomLogger(logPath, MyCustomLogLevel.Info);
+                logger.LogInfo($"Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): {startTime:yyyy-MM-dd HH:mm:ss}");
+                logger.LogInfo($"Current User's Login: {currentUser}");
+                logger.LogInfo($"Topic: {topic}");
+                logger.LogInfo($"Group: {group}");
+                logger.LogInfo($"Broker URL: {brokerUrl}");
+
+                // Load consumer library dynamically
+                var consumerAssembly = Assembly.Load("MessageBroker.Consumer.Library");
+                var consumerType = consumerAssembly.GetType("MessageBroker.Consumer.Library.DefaultConsumer");
+                
+                if (consumerType == null)
+                {
+                    throw new Exception("Could not find DefaultConsumer type in library");
+                }
+
+                // Create consumer instance using reflection
+                consumer = (IConsumer)Activator.CreateInstance(consumerType, 
+                    new object[] { logger, topic, group, brokerUrl });
+                
+                if (consumer == null)
+                {
+                    throw new Exception("Failed to create consumer instance");
+                }
+
+                // Get required methods using reflection
+                var isConnectedMethod = consumerType.GetMethod("IsConnectedAsync");
+                var registerMethod = consumerType.GetMethod("RegisterAsync");
+
+                if (isConnectedMethod == null || registerMethod == null)
+                {
+                    throw new Exception("Could not find required methods on consumer instance");
+                }
+
+                // Subscribe to consumer errors
+                consumer.OnError += (sender, ex) =>
+                {
+                    logger.LogError($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Consumer error: {ex.Message}", ex);
+                };
+
+                // Check connection
+                var isConnected = await (Task<bool>)isConnectedMethod.Invoke(consumer, null);
+                if (!isConnected)
+                {
+                    throw new Exception("Failed to connect to message broker");
+                }
+
+                // Register consumer
+                var isRegistered = await (Task<bool>)registerMethod.Invoke(consumer, null);
+                if (!isRegistered)
+                {
+                    throw new Exception("Failed to register consumer");
+                }
+
+                logger.LogInfo("Consumer started successfully");
+                Console.WriteLine("\nConsumer started successfully!");
+                Console.WriteLine($"Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
+                Console.WriteLine($"Current User's Login: {currentUser}");
+                Console.WriteLine($"Topic: {topic}");
+                Console.WriteLine($"Group: {group}");
+                Console.WriteLine("\nPress Ctrl+C to stop the consumer...");
+
+                // Setup cancellation
+                var cts = new CancellationTokenSource();
+                Console.CancelKeyPress += (s, e) =>
+                {
+                    e.Cancel = true;
+                    cts.Cancel();
+                    logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Shutdown requested by user");
+                };
+
                 try
                 {
-                    consumer.Dispose();
-                    logger.LogInfo("Consumer disposed");
+                    // Keep the application running until cancelled
+                    await Task.Delay(-1, cts.Token);
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException)
                 {
-                    logger.LogError("Error disposing consumer", ex);
+                    logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Consumer stopping...");
                 }
             }
-            logger.LogInfo("Application shutting down");
+            catch (Exception ex)
+            {
+                logger?.LogError($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Fatal error: {ex.Message}", ex);
+                Console.WriteLine($"\nFatal error at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
+                Console.WriteLine($"Error: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"Inner Error: {ex.InnerException.Message}");
+                }
+                Environment.Exit(1);
+            }
+            finally
+            {
+                if (consumer != null)
+                {
+                    var disposeMethod = consumer.GetType().GetMethod("Dispose");
+                    disposeMethod?.Invoke(consumer, null);
+                }
+                logger?.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Consumer application shutting down");
+            }
         }
     }
 }

@@ -1,5 +1,3 @@
-using System;
-
 namespace MessageBroker.Core.Attributes
 {
     [AttributeUsage(AttributeTargets.Class)]
