@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\MessageBroker.Consumer.App\MessageBroker.Consumer.App.csproj" />
+        <ProjectReference Include="..\MessageBroker.Core\MessageBroker.Core.csproj" />
+        <ProjectReference Include="..\MessageBroker.Storage\MessageBroker.Storage.csproj" />
+        <ProjectReference Include="..\MessageBroker.Logging\MessageBroker.Logging.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    </ItemGroup>
+
+</Project>

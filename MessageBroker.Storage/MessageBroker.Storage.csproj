@@ -7,7 +7,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\MessageBroker.Logging\MessageBroker.Logging.csproj" />
+      <ProjectReference Include="..\MessageBroker.Core\MessageBroker.Core.csproj" />
+        <ProjectReference Include="..\MessageBroker.Logging\MessageBroker.Logging.csproj" />
     </ItemGroup>
 
 </Project>

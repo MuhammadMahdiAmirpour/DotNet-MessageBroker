@@ -1,0 +1,76 @@
+using MessageBroker.Logging;
+using MessageBroker.API.Services;
+using MessageBroker.Storage;
+using MessageBroker.Core.Interfaces;
+using Microsoft.AspNetCore.HttpLogging;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddControllers();
+
+// Add HTTP logging
+builder.Services.AddHttpLogging(logging =>
+{
+    logging.LoggingFields = HttpLoggingFields.All;
+});
+
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(builder =>
+    {
+        builder.AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
+
+// Add Swagger/OpenAPI support
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// Configure logging
+var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "messagebroker.log");
+Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+var logger = new MyCustomLogger(logPath, MyCustomLogLevel.Info);
+builder.Services.AddSingleton<IMyCustomLogger>(logger);
+
+// Add Message Broker services
+builder.Services.AddSingleton<IMessageStorage, FileMessageStorage>();
+builder.Services.AddSingleton<IMessageBrokerServer, MessageBrokerServer>();
+
+// Configure URL
+builder.WebHost.UseUrls("http://localhost:5000");
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpLogging();
+app.UseCors();
+app.UseRouting();
+app.UseAuthorization();
+app.MapControllers();
+
+try
+{
+    var startTime = DateTime.UtcNow;
+    var currentUser = Environment.UserName;
+
+    logger.LogInfo($"Starting message broker at {startTime:yyyy-MM-dd HH:mm:ss}");
+    logger.LogInfo($"User: {currentUser}");
+    logger.LogInfo($"Server URL: http://localhost:5000");
+    
+    await app.RunAsync();
+}
+catch (Exception ex)
+{
+    logger.LogCritical($"Message broker terminated unexpectedly: {ex.Message}");
+    throw;
+}
