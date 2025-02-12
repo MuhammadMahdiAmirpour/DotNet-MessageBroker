@@ -1,162 +1,127 @@
-﻿using MessageBroker.Core.Interfaces;
-using MessageBroker.Core.Models;
+﻿using MessageBroker.Core.Models;
 using MessageBroker.Logging;
 using System.Reflection;
 using System.Text;
+using MessageBroker.Producer.Library;
 
-namespace MessageBroker.Producer.App
+namespace MessageBroker.Producer.App;
+
+internal static class Program
 {
-    internal static class Program
+    private static async Task Main(string[] args)
     {
-        static async Task Main(string[] args)
+        var startTime = DateTime.UtcNow;
+        var currentUser = Environment.UserName;
+        DefaultProducer? producer = null;
+        IMyCustomLogger? logger = null;
+
+        try
         {
-            var startTime = DateTime.UtcNow;
-            var currentUser = "MuhammadMahdiAmirpour";
-            IProducer? producer = null;
-            IMyCustomLogger? logger = null;
+            Console.WriteLine("\n=== Message Broker Producer ===");
+            Console.WriteLine("This application will send messages to a specific topic.");
+            Console.WriteLine("All consumer groups listening to your topic will receive these messages.\n");
 
-            try
+            Console.Write("Enter topic name (default: test-topic): ");
+            var topic = Console.ReadLine()?.Trim() ?? "test-topic";
+
+            Console.Write("Enter number of messages to send (default: 1000): ");
+            var messageCountStr = Console.ReadLine()?.Trim() ?? "1000";
+            var messageCount = int.TryParse(messageCountStr, out var n) ? n : 1000;
+
+            Console.WriteLine($"\nConfiguration:");
+            Console.WriteLine($"- Topic: '{topic}'");
+            Console.WriteLine($"- Messages to send: {messageCount}");
+            Console.WriteLine($"- Current user: {currentUser}");
+            
+            Console.Write("\nPress Enter to start sending messages...");
+            Console.ReadLine();
+
+            var brokerUrl = GetArgValue(args, "--broker") ?? "http://localhost:5000";
+            var logsDir = Path.Combine(AppContext.BaseDirectory, "logs");
+            Directory.CreateDirectory(logsDir);
+
+            var logFileName = $"producer_{currentUser}_{startTime:yyyyMMdd}.log";
+            var logPath = Path.Combine(logsDir, logFileName);
+            
+            logger = new MyCustomLogger(logPath, MyCustomLogLevel.Info);
+            logger.LogInfo($"Starting producer at: {startTime:yyyy-MM-dd HH:mm:ss}");
+
+            var producerAssembly = Assembly.Load("MessageBroker.Producer.Library");
+            var producerType = producerAssembly.GetType("MessageBroker.Producer.Library.DefaultProducer");
+            
+            producer = (DefaultProducer)Activator.CreateInstance(
+                type: producerType,
+                args: [logger, brokerUrl]
+            );
+
+            
+            if (producer != null)
             {
-                // Parse command line arguments with defaults
-                var brokerUrl = GetArgValue(args, "--broker") ?? "http://localhost:5000";
+                await producer.InitializeAsync();
+                producer.OnError += (sender, ex) => { logger.LogError($"Producer error: {ex.Message}", ex); };
 
-                // Create logs directory if it doesn't exist
-                var logsDir = Path.Combine(AppContext.BaseDirectory, "logs");
-                Directory.CreateDirectory(logsDir);
+                Console.WriteLine($"\nStarting to send {messageCount} messages to topic '{topic}'...\n");
+                var successCount = 0;
+                var failCount = 0;
 
-                // Setup logger
-                var logFileName = $"producer_{currentUser}_{startTime:yyyyMMdd}.log";
-                var logPath = Path.Combine(logsDir, logFileName);
-                
-                logger = new MyCustomLogger(logPath, MyCustomLogLevel.Info);
-                logger.LogInfo($"Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): {startTime:yyyy-MM-dd HH:mm:ss}");
-                logger.LogInfo($"Current User's Login: {currentUser}");
-                logger.LogInfo($"Broker URL: {brokerUrl}");
-
-                // Load producer library dynamically
-                var producerAssembly = Assembly.Load("MessageBroker.Producer.Library");
-                var producerType = producerAssembly.GetType("MessageBroker.Producer.Library.DefaultProducer");
-                
-                if (producerType == null)
+                for (int i = 1; i <= messageCount; i++)
                 {
-                    throw new Exception("Could not find DefaultProducer type in library");
-                }
-
-                // Create producer instance using reflection
-                producer = (IProducer)Activator.CreateInstance(producerType, new object[] { logger, brokerUrl });
-                
-                if (producer == null)
-                {
-                    throw new Exception("Failed to create producer instance");
-                }
-
-                // Get InitializeAsync method using reflection
-                var initializeMethod = producerType.GetMethod("InitializeAsync");
-                if (initializeMethod == null)
-                {
-                    throw new Exception("Could not find InitializeAsync method");
-                }
-
-                // Initialize the producer
-                await (Task)initializeMethod.Invoke(producer, null);
-
-                // Subscribe to producer errors
-                producer.OnError += (sender, ex) =>
-                {
-                    logger.LogError($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Producer error: {ex.Message}", ex);
-                };
-
-                logger.LogInfo("Producer started successfully");
-                Console.WriteLine("\nProducer started successfully!");
-                Console.WriteLine($"Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
-                Console.WriteLine($"Current User's Login: {currentUser}");
-                Console.WriteLine("\nEnter 'Q' to quit, topic:message to send, 'I' for information");
-
-                while (true)
-                {
-                    Console.Write("\nEnter command: ");
-                    var input = Console.ReadLine()?.Trim();
-
-                    if (string.IsNullOrEmpty(input))
-                        continue;
-
-                    if (input.Equals("Q", StringComparison.OrdinalIgnoreCase))
-                    {
-                        logger.LogInfo($"Shutdown requested by user");
-                        break;
-                    }
-
-                    if (input.Equals("I", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var isConnectedMethod = producerType.GetMethod("IsConnectedAsync");
-                        var isConnected = await (Task<bool>)isConnectedMethod.Invoke(producer, null);
-
-                        Console.WriteLine("\nProducer Status:");
-                        Console.WriteLine($"Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
-                        Console.WriteLine($"Current User's Login: {currentUser}");
-                        Console.WriteLine($"Broker URL: {brokerUrl}");
-                        Console.WriteLine($"Connected: {isConnected}");
-                        continue;
-                    }
-
-                    var parts = input.Split(':', 2);
-                    if (parts.Length != 2)
-                    {
-                        Console.WriteLine("Invalid format. Use 'topic:message'");
-                        continue;
-                    }
-
                     var message = new Message
                     {
                         Id = Guid.NewGuid(),
-                        Topic = parts[0].Trim(),
-                        Payload = Encoding.UTF8.GetBytes(parts[1].Trim()),
+                        Topic = topic,
+                        Payload = Encoding.UTF8.GetBytes(
+                            $"Message {i}/{messageCount} for topic '{topic}' sent by {currentUser} at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}"),
                         Timestamp = DateTime.UtcNow
                     };
 
-                    var produceMethod = producerType.GetMethod("ProduceAsync");
-                    var success = await (Task<bool>)produceMethod.Invoke(producer, new object[] { message });
+                    var success = await producer.ProduceAsync(message);
 
                     if (success)
                     {
-                        logger.LogInfo($"Message sent successfully: {message.Id}");
-                        Console.WriteLine($"Message sent successfully! ID: {message.Id}");
+                        successCount++;
+                        logger.LogInfo($"Message {i}/{messageCount} sent successfully. ID: {message.Id}");
                     }
                     else
                     {
-                        logger.LogError($"Failed to send message: {message.Id}", new Exception("Message sending failed"));
-                        Console.WriteLine("Failed to send message.");
+                        failCount++;
+                        logger.LogError($"Failed to send message {i}/{messageCount}. ID: {message.Id}",
+                            new Exception("Send failed"));
                     }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger?.LogError($"Fatal error: {ex.Message}", ex);
-                Console.WriteLine($"\nFatal error at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}");
-                Console.WriteLine($"Error: {ex.Message}");
-                if (ex.InnerException != null)
-                {
-                    Console.WriteLine($"Inner Error: {ex.InnerException.Message}");
-                }
-                Environment.Exit(1);
-            }
-            finally
-            {
-                if (producer != null)
-                {
-                    var disposeMethod = producer.GetType().GetMethod("Dispose");
-                    disposeMethod?.Invoke(producer, null);
-                }
-                logger?.LogInfo("Producer application shutting down");
-            }
-        }
 
-        private static string? GetArgValue(string[] args, string key)
-        {
-            var index = Array.IndexOf(args, key);
-            if (index >= 0 && index < args.Length - 1)
-                return args[index + 1];
-            return null;
+                    if (i % 100 == 0)
+                    {
+                        Console.WriteLine(
+                            $"Progress: {i}/{messageCount} messages sent. Success: {successCount}, Failed: {failCount}");
+                    }
+
+                    await Task.Delay(100); // Rate limiting
+                }
+
+                Console.WriteLine("\nFinished sending messages!");
+                Console.WriteLine($"Total Success: {successCount}");
+                Console.WriteLine($"Total Failed: {failCount}");
+                logger.LogInfo($"Completed sending messages. Success: {successCount}, Failed: {failCount}");
+            }
         }
+        catch (Exception ex)
+        {
+            logger?.LogError($"Fatal error: {ex.Message}", ex);
+            Console.WriteLine($"\nFatal error: {ex.Message}");
+            Environment.Exit(1);
+        }
+        finally
+        {
+            producer?.Dispose();
+            logger?.LogInfo("Producer application shutting down");
+        }
+    }
+
+    private static string? GetArgValue(string[] args, string key)
+    {
+        var index = Array.IndexOf(args, key);
+        if (index >= 0 && index < args.Length - 1)
+            return args[index + 1];
+        return null;
     }
 }

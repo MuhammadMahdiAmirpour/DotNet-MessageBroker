@@ -9,6 +9,7 @@ namespace MessageBroker.Producer.Library;
 
 [RateLimit(2)]
 [ProducerImplementationData(3)]
+[Endpoint("/api/messagebroker/messages")]
 public class DefaultProducer : ThreadedProducerBase
 {
     private readonly HttpClient _httpClient;

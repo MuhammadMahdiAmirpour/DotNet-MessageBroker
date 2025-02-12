@@ -18,9 +18,9 @@ builder.Services.AddHttpLogging(logging =>
 // Add CORS
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(builder =>
+    options.AddDefaultPolicy(policyBuilder =>
     {
-        builder.AllowAnyOrigin()
+        policyBuilder.AllowAnyOrigin()
             .AllowAnyMethod()
             .AllowAnyHeader();
     });
@@ -32,7 +32,7 @@ builder.Services.AddSwaggerGen();
 
 // Configure logging
 var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "messagebroker.log");
-Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+Directory.CreateDirectory(Path.GetDirectoryName(logPath) ?? string.Empty);
 var logger = new MyCustomLogger(logPath, MyCustomLogLevel.Info);
 builder.Services.AddSingleton<IMyCustomLogger>(logger);
 
@@ -65,7 +65,7 @@ try
 
     logger.LogInfo($"Starting message broker at {startTime:yyyy-MM-dd HH:mm:ss}");
     logger.LogInfo($"User: {currentUser}");
-    logger.LogInfo($"Server URL: http://localhost:5000");
+    logger.LogInfo("Server URL: http://localhost:5000");
     
     await app.RunAsync();
 }

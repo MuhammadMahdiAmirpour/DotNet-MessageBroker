@@ -135,7 +135,7 @@ public class FileMessageStorage : IMessageStorage
         }
     }
 
-    public async Task<IEnumerable<MessageStorageItem>> LoadAllMessagesAsync()
+    public Task<IEnumerable<MessageStorageItem>> LoadAllMessagesAsync()
     {
         var result = new List<MessageStorageItem>();
 
@@ -158,7 +158,7 @@ public class FileMessageStorage : IMessageStorage
             _logger.LogError($"Error loading all messages: {ex.Message}", ex);
         }
 
-        return result;
+        return Task.FromResult<IEnumerable<MessageStorageItem>>(result);
     }
 
     public async Task<IEnumerable<IMessage>> LoadMessagesAsync(string topic, string? consumerGroup = null)
@@ -221,7 +221,7 @@ public class FileMessageStorage : IMessageStorage
         }
     }
 
-    public async Task ClearMessagesAsync(string topic)
+    public Task ClearMessagesAsync(string topic)
     {
         if (string.IsNullOrEmpty(topic))
             throw new ArgumentException("Topic cannot be empty", nameof(topic));
@@ -243,5 +243,7 @@ public class FileMessageStorage : IMessageStorage
             _logger.LogError($"Error clearing messages for topic {topic}: {ex.Message}", ex);
             throw;
         }
+
+        return Task.CompletedTask;
     }
 }

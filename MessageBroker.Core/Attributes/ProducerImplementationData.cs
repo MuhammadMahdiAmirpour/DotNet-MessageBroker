@@ -1,13 +1,7 @@
-namespace MessageBroker.Core.Attributes
-{
-    [AttributeUsage(AttributeTargets.Class)]
-    public class ProducerImplementationData : Attribute
-    {
-        public int RetryNumber { get; }
+namespace MessageBroker.Core.Attributes;
 
-        public ProducerImplementationData(int retryNumber)
-        {
-            RetryNumber = retryNumber;
-        }
-    }
+[AttributeUsage(AttributeTargets.Class)]
+public class ProducerImplementationData(int retryNumber) : Attribute
+{
+    public int RetryNumber { get; } = retryNumber;
 }

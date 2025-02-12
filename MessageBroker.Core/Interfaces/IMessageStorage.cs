@@ -1,7 +1,6 @@
-using MessageBroker.Core.Interfaces;
 using MessageBroker.Core.Models;
 
-namespace MessageBroker.Storage;
+namespace MessageBroker.Core.Interfaces;
 
 public interface IMessageStorage
 {

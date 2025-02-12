@@ -8,15 +8,14 @@ using MessageBroker.Logging;
 namespace MessageBroker.Consumer.Library;
 
 [RateLimit(3)]
+[Endpoint("/api/messagebroker/consumers")]
 public class DefaultConsumer : ThreadedConsumerBase
 {
     private readonly HttpClient _httpClient;
-    private readonly string _brokerUrl;
     private readonly string _topic;
     private readonly int _maxRetries;
     private readonly int _retryDelayMs;
     private readonly string _consumerId;
-    private readonly string _currentUser;
     private bool _isRegistered;
 
     public DefaultConsumer(
@@ -27,42 +26,47 @@ public class DefaultConsumer : ThreadedConsumerBase
         : base(logger, consumerGroup)
     {
         _topic = topic ?? throw new ArgumentNullException(nameof(topic));
-        _brokerUrl = brokerUrl.TrimEnd('/');
-        _currentUser = "MuhammadMahdiAmirpour"; // Current user's login
+        var brokerUrl1 = brokerUrl.TrimEnd('/');
+        const string currentUser = "MuhammadMahdiAmirpour"; // Current user's login
         _maxRetries = 3;
         _retryDelayMs = 2000;
-        _consumerId = $"consumer-{_currentUser.ToLower()}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString().Substring(0, 8)}";
+        _consumerId = $"consumer-{currentUser.ToLower()}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString().Substring(0, 8)}";
         _isRegistered = false;
 
         _httpClient = new HttpClient
         {
-            BaseAddress = new Uri(_brokerUrl),
+            BaseAddress = new Uri(brokerUrl1),
             Timeout = TimeSpan.FromSeconds(30)
         };
 
         MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Consumer initialized");
-        MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - User: {_currentUser}");
+        MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - User: {currentUser}");
         MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Consumer ID: {_consumerId}");
         MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Topic: {_topic}");
         MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Group: {ConsumerGroup}");
-        MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Broker URL: {_brokerUrl}");
+        MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Broker URL: {brokerUrl1}");
     }
 
     public override async Task<bool> IsConnectedAsync()
     {
-        for (int i = 0; i < _maxRetries; i++)
+        for (var i = 0; i < _maxRetries; i++)
         {
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var response = await _httpClient.GetAsync("api/messagebroker/health", cts.Token);
-                
+
                 if (response.IsSuccessStatusCode)
                 {
-                    var healthData = await response.Content.ReadFromJsonAsync<HealthCheckResponse>();
-                    MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Successfully connected to broker");
-                    return true;
+                    var healthData = await response.Content.ReadFromJsonAsync<HealthCheckResponse>(cancellationToken: cts.Token);
+                    if (healthData?.Status == "Healthy")
+                    {
+                        MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Successfully connected to broker. Version: {healthData.Version}, Last Check: {HealthCheckResponse.Timestamp:yyyy-MM-dd HH:mm:ss}");
+                        return true;
+                    }
                 }
+            
+                await Task.Delay(_retryDelayMs * (i + 1));
             }
             catch (Exception ex)
             {
@@ -91,7 +95,7 @@ public class DefaultConsumer : ThreadedConsumerBase
             };
 
             var response = await _httpClient.PostAsJsonAsync("api/messagebroker/consumers", registration);
-            
+        
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
@@ -100,6 +104,10 @@ public class DefaultConsumer : ThreadedConsumerBase
 
             _isRegistered = true;
             MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Consumer {_consumerId} successfully registered");
+        
+            // Start polling for messages
+            _ = Task.Run(() => PollMessagesAsync(CancellationToken.None));
+        
             return true;
         }
         catch (Exception ex)
@@ -118,14 +126,21 @@ public class DefaultConsumer : ThreadedConsumerBase
 
         try
         {
-            var content = System.Text.Encoding.UTF8.GetString(message.Payload ?? Array.Empty<byte>());
+            var content = System.Text.Encoding.UTF8.GetString(message.Payload);
             MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Processing message {message.Id}");
             MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Content: {content}");
-            Console.WriteLine($"\nReceived message: {content}");
-            
-            // Simulate some processing work
+        
+            // Enhanced console output
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("\n=== New Message Received ===");
+            Console.WriteLine($"ID: {message.Id}");
+            Console.WriteLine($"Content: {content}");
+            Console.WriteLine($"Timestamp: {message.Timestamp:yyyy-MM-dd HH:mm:ss}");
+            Console.WriteLine("=========================\n");
+            Console.ResetColor();
+        
             await Task.Delay(100);
-            
+        
             return true;
         }
         catch (Exception ex)
@@ -133,6 +148,58 @@ public class DefaultConsumer : ThreadedConsumerBase
             MyCustomLogger.LogError($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Error processing message {message.Id}: {ex.Message}", ex);
             RaiseOnError(ex);
             return false;
+        }
+    }
+    
+    private async Task PollMessagesAsync(CancellationToken cancellationToken)
+    {
+        MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Starting message polling for topic {_topic}");
+        
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var endpoint = $"api/messagebroker/topics/{_topic}/messages?consumerGroup={ConsumerGroup}";
+                MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Polling endpoint: {endpoint}");
+                
+                var response = await _httpClient.GetAsync(endpoint, cancellationToken);
+                MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Poll response status: {response.StatusCode}");
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var messages = await response.Content.ReadFromJsonAsync<List<MessageDto>>(cancellationToken: cancellationToken);
+                    MyCustomLogger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Retrieved {messages?.Count ?? 0} messages");
+                    
+                    if (messages != null && messages.Any())
+                    {
+                        foreach (var messageDto in messages)
+                        {
+                            var message = new Message
+                            {
+                                Id = Guid.Parse(messageDto.Id),
+                                Topic = messageDto.Topic,
+                                ConsumerGroup = messageDto.ConsumerGroup ?? "",
+                                Priority = messageDto.Priority,
+                                Timestamp = messageDto.Timestamp,
+                                Payload = System.Text.Encoding.UTF8.GetBytes(messageDto.Content)
+                            };
+                            
+                            await ProcessMessageAsync(message);
+                        }
+                    }
+                }
+                
+                await Task.Delay(1000, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                MyCustomLogger.LogError($"Error polling messages: {ex.Message}", ex);
+                await Task.Delay(5000, cancellationToken);
+            }
         }
     }
 
@@ -149,7 +216,8 @@ public class DefaultConsumer : ThreadedConsumerBase
     private class HealthCheckResponse
     {
         public string Status { get; set; } = "";
-        public DateTime Timestamp { get; set; }
+        public static DateTime Timestamp => default;
+
         public string Version { get; set; } = "";
     }
 }

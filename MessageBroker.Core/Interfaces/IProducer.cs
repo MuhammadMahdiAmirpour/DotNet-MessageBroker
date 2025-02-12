@@ -1,9 +1,8 @@
-namespace MessageBroker.Core.Interfaces
+namespace MessageBroker.Core.Interfaces;
+
+public interface IProducer : IDisposable
 {
-    public interface IProducer : IDisposable
-    {
-        Task<bool> ProduceAsync(IMessage message);
-        Task<bool> IsConnectedAsync();
-        event EventHandler<Exception> OnError;
-    }
+    Task<bool> ProduceAsync(IMessage message);
+    Task<bool> IsConnectedAsync();
+    event EventHandler<Exception> OnError;
 }
