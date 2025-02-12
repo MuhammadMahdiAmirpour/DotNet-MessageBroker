@@ -1,104 +1,112 @@
-🚀 Message Broker System
+🌱 **Smart Plugin Integration Guide** 🌱
 
-    A high-performance, plugin-based message broker system with multi-consumer support
+<div align="center">
 
-🌟 Features
+![Coding Cat](https://media.giphy.com/media/LmNwrBhejkK9EFP504/giphy.gif)
+<hr>
+*"Good developers copy, great developers automate"*
 
-    🔌 Plugin-based architecture
-    🔄 Multiple producer/consumer support
-    ⚡ Configurable thread count per plugin
-    🔁 Automatic retry mechanism
-    🎚️ Rate limiting
-    📝 Detailed logging
-    📨 Multiple topic support
-    ⚖️ Consumer group load balancing
+</div>
 
-🏗️ Project Structure
+---
 
-MessageBroker/
-├── MessageBroker.API                    # Message broker server
-├── MessageBroker.Consumer.App           # Consumer application
-├── MessageBroker.Consumer.Library       # Consumer core library
-├── MessageBroker.Core                   # Core interfaces and models
-├── MessageBroker.Logging                # Logging infrastructure
-├── MessageBroker.Plugins.DefaultConsumer # Default consumer plugin
-├── MessageBroker.Plugins.DefaultProducer # Default producer plugin
-├── MessageBroker.Producer.App           # Producer application
-├── MessageBroker.Producer.Library       # Producer core library
-└── MessageBroker.Storage                # Message storage implementation
+## 🛠️ **Automatic Plugin Setup** 🛠️
 
-🚀 Quick Start
+### 1. **Edit Consumer Project File**
+```xml
+<!-- MessageBroker.Consumer.App.csproj -->
+<ItemGroup>
+  <!-- Add plugin project references -->
+  <ProjectReference Include="..\MessageBroker.Plugins.MyCustomPlugin\MessageBroker.Plugins.MyCustomPlugin.csproj">
+    <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+  </ProjectReference>
+</ItemGroup>
 
-    Launch the Message Broker API
+<Target Name="CopyPlugins" AfterTargets="Build">
+  <PropertyGroup>
+    <PluginsDir>$(OutputPath)plugins</PluginsDir>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <PluginBinaries Include="..\MessageBroker.Plugins.*\bin\$(Configuration)\net9.0\*.dll" />
+  </ItemGroup>
 
-cd MessageBroker.API
+  <MakeDir Directories="$(PluginsDir)" />
+  <Copy SourceFiles="@(PluginBinaries)" 
+        DestinationFolder="$(PluginsDir)" 
+        OverwriteReadOnlyFiles="true" />
+</Target>
+```
+
+### 2. **Solution Structure**
+```bash
+Solution/
+├── MessageBroker.Consumer.App/
+│   └── 📄 ConsumerApp.csproj (modified)
+└── MessageBroker.Plugins.MyCustomPlugin/
+    └── 📄 MyCustomPlugin.cs
+```
+
+---
+
+## 🌟 **How It Works** 🌟
+
+1. **Automatic Discovery**  
+   Finds all plugin projects matching `MessageBroker.Plugins.*` pattern
+
+2. **Smart Copying**  
+   Copies built DLLs to consumer's `plugins` directory on every build
+
+3. **Clean Integration**  
+   `ReferenceOutputAssembly=false` keeps your dependencies clean
+
+---
+
+## 🚀 **Development Workflow** 🚀
+
+1. Create new plugin project
+```bash
+dotnet new classlib -n MessageBroker.Plugins.MyPlugin
+```
+
+2. Add to consumer's project file
+```xml
+<ProjectReference Include="..\MessageBroker.Plugins.MyPlugin\MessageBroker.Plugins.MyPlugin.csproj">
+  <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+</ProjectReference>
+```
+
+3. Build and run - plugins auto-deploy!
+```bash
+dotnet build
 dotnet run
+```
 
-    Start Consumer(s)
+<div align="center">
 
-cd MessageBroker.Consumer.App
-dotnet run
+![Magic](https://media.giphy.com/media/12NUbkX6p4xOO4/giphy.gif)  
+*No more manual copying!*
 
-    💡 Enter topic name and consumer group when prompted
+</div>
 
-    Start Producer
+---
 
-cd MessageBroker.Producer.App
-dotnet run
+## 💡 **Maintenance Tips** 💡
 
-    💡 Enter topics to send messages to when prompted
+- Add new plugins by simply including their project references
+- All plugins rebuild automatically with solution builds
+- Keep plugin directory clean with:  
+  ```xml
+  <Clean Include="$(PluginsDir)\**" />
+  ```
+- Supports both Debug and Release configurations
 
-⚙️ Configuration Examples
-🔄 Multiple Consumer Setup
+---
 
-# Analytics Consumer
-dotnet run
-Topic: orders
-Group: analytics-group
+<div align="center">
 
-# Logging Consumer
-dotnet run
-Topic: orders
-Group: logging-group
+🎉 **Happy Automated Developing!**  
+*Your future self will thank you for this setup* 💖
 
-📨 Multi-Topic Producer
-
-dotnet run
-Topics: orders,analytics,logging
-Messages: 1000
-
-🔍 Monitoring
-Component	Location
-Logs	logs directory
-Status	GET /api/messagebroker/status
-Topics	GET /api/messagebroker/topics
-Consumers	GET /api/messagebroker/consumers
-🛠️ Performance Tuning
-
-// Increase thread count for higher throughput
-[RateLimit(maxConcurrentThreads: 10)]
-public class HighPerformancePlugin : IMessageBrokerPlugin
-{
-    // Implementation
-}
-
-📈 Best Practices
-
-    Start API before consumers and producers
-    Use different consumer groups for different processing needs
-    Monitor logs for performance optimization
-    Implement proper error handling in plugins
-
-🤝 Contributing
-
-    Fork repository
-    Create feature branch
-    Commit changes
-    Push to branch
-    Create Pull Request
-
-📄 License
-
-MIT License - feel free to use in your projects!
-
-Built with ❤️ using .NET 9.0
+</div>
