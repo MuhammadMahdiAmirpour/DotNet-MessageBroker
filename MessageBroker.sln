@@ -19,6 +19,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessageBroker.Consumer.Libr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessageBroker.Producer.Library", "MessageBroker.Producer.Library\MessageBroker.Producer.Library.csproj", "{AF3D64F9-CDFA-4103-AE66-CAEF25C77ECE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessageBroker.Plugins.DefaultConsumer", "MessageBroker.Plugins.DefaultConsumer\MessageBroker.Plugins.DefaultConsumer.csproj", "{0B6E1998-6160-4F3B-813C-D112BE3C91FD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessageBroker.Plugins.DefaultProducer", "MessageBroker.Plugins.DefaultProducer\MessageBroker.Plugins.DefaultProducer.csproj", "{57976181-DB17-4FAA-AEA1-B80331E6482C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,5 +64,13 @@ Global
 		{AF3D64F9-CDFA-4103-AE66-CAEF25C77ECE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AF3D64F9-CDFA-4103-AE66-CAEF25C77ECE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AF3D64F9-CDFA-4103-AE66-CAEF25C77ECE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0B6E1998-6160-4F3B-813C-D112BE3C91FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0B6E1998-6160-4F3B-813C-D112BE3C91FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0B6E1998-6160-4F3B-813C-D112BE3C91FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0B6E1998-6160-4F3B-813C-D112BE3C91FD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{57976181-DB17-4FAA-AEA1-B80331E6482C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57976181-DB17-4FAA-AEA1-B80331E6482C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57976181-DB17-4FAA-AEA1-B80331E6482C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{57976181-DB17-4FAA-AEA1-B80331E6482C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

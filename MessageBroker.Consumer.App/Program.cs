@@ -1,6 +1,5 @@
-﻿using MessageBroker.Consumer.Library;
+﻿using MessageBroker.Core.Plugin;
 using MessageBroker.Logging;
-using System.Reflection;
 
 namespace MessageBroker.Consumer.App;
 
@@ -29,64 +28,55 @@ internal static class Program
         Console.Write("\nPress Enter to start consuming messages...");
         Console.ReadLine();
 
-        await RunConsumers(topic, group, brokerUrl);
+        await RunConsumer(topic, group, brokerUrl);
     }
 
-    private static async Task RunConsumers(string topic, string group, string brokerUrl)
+    private static async Task RunConsumer(string topic, string group, string brokerUrl)
     {
         var logsDir = Path.Combine(AppContext.BaseDirectory, "logs");
+        var pluginsDir = Path.Combine(AppContext.BaseDirectory, "plugins");
         Directory.CreateDirectory(logsDir);
+        Directory.CreateDirectory(pluginsDir);
+
         var logger = new MyCustomLogger(Path.Combine(logsDir, $"consumer_main_{DateTime.UtcNow:yyyyMMdd}.log"), MyCustomLogLevel.Info);
         var cts = new CancellationTokenSource();
 
-        var consumerAssembly = Assembly.Load("MessageBroker.Consumer.Library");
-        var consumerType = consumerAssembly.GetType("MessageBroker.Consumer.Library.DefaultConsumer");
-
-        Console.WriteLine("\nStarting consumer...");
-
-        var consumerLogger = new MyCustomLogger(Path.Combine(logsDir, $"consumer_{DateTime.UtcNow:yyyyMMdd}.log"), MyCustomLogLevel.Info);
-        var consumer = (DefaultConsumer)Activator.CreateInstance(
-            type: consumerType!,
-            args: [consumerLogger, topic, group, brokerUrl])!;
-
         try 
         {
-            if (await consumer.IsConnectedAsync() && await consumer.RegisterAsync())
+            Console.WriteLine("\nStarting consumer...");
+
+            var pluginLoader = new PluginLoader(logger, pluginsDir);
+            await pluginLoader.LoadPluginsAsync();
+            var consumer = pluginLoader.GetPlugin("DefaultConsumerPlugin", brokerUrl, topic, group);
+        
+            consumer.Initialize();
+
+            Console.WriteLine("Consumer started successfully.");
+            Console.WriteLine("Press Ctrl+C to stop...\n");
+
+            Console.CancelKeyPress += (_, e) =>
             {
-                Console.WriteLine("Consumer started successfully.");
-                Console.WriteLine("Press Ctrl+C to stop...\n");
+                e.Cancel = true;
+                cts.Cancel();
+            };
 
-                Console.CancelKeyPress += (_, e) =>
+            try
+            {
+                while (!cts.Token.IsCancellationRequested)
                 {
-                    e.Cancel = true;
-                    cts.Cancel();
-                };
-
-                try
-                {
-                    while (!cts.Token.IsCancellationRequested)
-                    {
-                        await Task.Delay(100, cts.Token);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    logger.LogInfo("Shutdown requested");
-                    Console.WriteLine("\nShutdown requested. Cleaning up...");
+                    await Task.Delay(100, cts.Token);
                 }
             }
-            else
+            catch (OperationCanceledException)
             {
-                Console.WriteLine("Consumer could not be started. Check broker connection and try again.");
+                logger.LogInfo("Shutdown requested");
+                Console.WriteLine("\nShutdown requested. Cleaning up...");
             }
         }
         catch (Exception ex)
         {
             logger.LogError($"Failed to start consumer: {ex.Message}", ex);
-        }
-        finally
-        {
-            consumer.Dispose();
+            Console.WriteLine($"Failed to start consumer: {ex.Message}");
         }
     }
 

@@ -24,13 +24,13 @@ public abstract class ThreadedConsumerBase : IConsumer
         _cancellationTokenSource = new CancellationTokenSource();
         _disposed = false;
 
-        var rateLimitAttr = (RateLimitAttribute)Attribute.GetCustomAttribute(
-            GetType(), typeof(RateLimitAttribute));
+        var rateLimitAttr = (RateLimit)Attribute.GetCustomAttribute(
+            GetType(), typeof(RateLimit));
             
         if (rateLimitAttr == null)
             throw new InvalidOperationException("Consumer must specify RateLimit attribute");
 
-        var threadCount = rateLimitAttr.ConcurrentThreads;
+        var threadCount = rateLimitAttr.MaxConcurrentThreads; // Changed to match the attribute property name
         _workerTasks = new Task[threadCount];
 
         for (int i = 0; i < threadCount; i++)
@@ -38,7 +38,7 @@ public abstract class ThreadedConsumerBase : IConsumer
             _workerTasks[i] = Task.Run(() => WorkerThread(_cancellationTokenSource.Token));
         }
 
-        MyCustomLogger.LogInfo("Consumer " + ConsumerGroup + " started with " + threadCount + " worker threads");
+        MyCustomLogger.LogInfo($"Consumer {ConsumerGroup} started with {threadCount} worker threads");
     }
 
     protected virtual void RaiseOnError(Exception ex)
@@ -69,7 +69,7 @@ public abstract class ThreadedConsumerBase : IConsumer
         }
     }
 
-    protected abstract Task<bool> ProcessMessageAsync(IMessage message);
+    public abstract Task<bool> ProcessMessageAsync(IMessage message);
 
     public Task<bool> ConsumeAsync(IMessage message)
     {

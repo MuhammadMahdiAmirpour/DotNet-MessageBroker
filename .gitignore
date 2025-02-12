@@ -2,3 +2,7 @@
 */.idea/
 */bin/
 */obj/
+
+# Keep plugin DLLs
+!*/bin/Debug/net9.0/plugins/
+!*/bin/Debug/net9.0/plugins/*.dll

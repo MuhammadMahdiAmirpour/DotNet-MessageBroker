@@ -1,8 +1,7 @@
 ﻿using MessageBroker.Core.Models;
+using MessageBroker.Core.Plugin;
 using MessageBroker.Logging;
-using System.Reflection;
 using System.Text;
-using MessageBroker.Producer.Library;
 
 namespace MessageBroker.Producer.App;
 
@@ -12,25 +11,25 @@ internal static class Program
     {
         var startTime = DateTime.UtcNow;
         var currentUser = Environment.UserName;
-        DefaultProducer? producer = null;
         IMyCustomLogger? logger = null;
 
         try
         {
             Console.WriteLine("\n=== Message Broker Producer ===");
-            Console.WriteLine("This application will send messages to a specific topic.");
-            Console.WriteLine("All consumer groups listening to your topic will receive these messages.\n");
+            Console.WriteLine("This application will send messages to multiple topics.");
+            Console.WriteLine("All consumer groups listening to these topics will receive these messages.\n");
 
-            Console.Write("Enter topic name (default: test-topic): ");
-            var topic = Console.ReadLine()?.Trim() ?? "test-topic";
+            Console.Write("Enter topics (comma-separated) to send messages to (default: analytics,logging): ");
+            var topicsInput = Console.ReadLine()?.Trim() ?? "analytics,logging";
+            var topics = topicsInput.Split(',').Select(t => t.Trim()).ToList();
 
-            Console.Write("Enter number of messages to send (default: 1000): ");
+            Console.Write("Enter number of messages to send per topic (default: 1000): ");
             var messageCountStr = Console.ReadLine()?.Trim() ?? "1000";
             var messageCount = int.TryParse(messageCountStr, out var n) ? n : 1000;
 
             Console.WriteLine($"\nConfiguration:");
-            Console.WriteLine($"- Topic: '{topic}'");
-            Console.WriteLine($"- Messages to send: {messageCount}");
+            Console.WriteLine($"- Topics: {string.Join(", ", topics)}");
+            Console.WriteLine($"- Messages to send per topic: {messageCount}");
             Console.WriteLine($"- Current user: {currentUser}");
             
             Console.Write("\nPress Enter to start sending messages...");
@@ -38,7 +37,9 @@ internal static class Program
 
             var brokerUrl = GetArgValue(args, "--broker") ?? "http://localhost:5000";
             var logsDir = Path.Combine(AppContext.BaseDirectory, "logs");
+            var pluginsDir = Path.Combine(AppContext.BaseDirectory, "plugins");
             Directory.CreateDirectory(logsDir);
+            Directory.CreateDirectory(pluginsDir);
 
             var logFileName = $"producer_{currentUser}_{startTime:yyyyMMdd}.log";
             var logPath = Path.Combine(logsDir, logFileName);
@@ -46,25 +47,22 @@ internal static class Program
             logger = new MyCustomLogger(logPath, MyCustomLogLevel.Info);
             logger.LogInfo($"Starting producer at: {startTime:yyyy-MM-dd HH:mm:ss}");
 
-            var producerAssembly = Assembly.Load("MessageBroker.Producer.Library");
-            var producerType = producerAssembly.GetType("MessageBroker.Producer.Library.DefaultProducer");
-            
-            producer = (DefaultProducer)Activator.CreateInstance(
-                type: producerType,
-                args: [logger, brokerUrl]
+            var pluginLoader = new PluginLoader(logger, pluginsDir);
+            await pluginLoader.LoadPluginsAsync();
+
+            var producers = topics.ToDictionary(
+                topic => topic,
+                topic => pluginLoader.GetPlugin("DefaultProducerPlugin", brokerUrl, topic, "producer-group")
             );
 
-            
-            if (producer != null)
+            Console.WriteLine($"\nStarting to send {messageCount} messages to {topics.Count} topics...\n");
+            var successCount = 0;
+            var failCount = 0;
+            var totalMessages = messageCount * topics.Count;
+
+            for (var i = 1; i <= messageCount; i++)
             {
-                await producer.InitializeAsync();
-                producer.OnError += (sender, ex) => { logger.LogError($"Producer error: {ex.Message}", ex); };
-
-                Console.WriteLine($"\nStarting to send {messageCount} messages to topic '{topic}'...\n");
-                var successCount = 0;
-                var failCount = 0;
-
-                for (int i = 1; i <= messageCount; i++)
+                foreach (var topic in topics)
                 {
                     var message = new Message
                     {
@@ -75,34 +73,32 @@ internal static class Program
                         Timestamp = DateTime.UtcNow
                     };
 
-                    var success = await producer.ProduceAsync(message);
-
-                    if (success)
+                    try
                     {
+                        await producers[topic].ExecuteAsync(message);
                         successCount++;
-                        logger.LogInfo($"Message {i}/{messageCount} sent successfully. ID: {message.Id}");
+                        logger.LogInfo($"Message {i}/{messageCount} sent successfully to topic '{topic}'. ID: {message.Id}");
                     }
-                    else
+                    catch (Exception ex)
                     {
                         failCount++;
-                        logger.LogError($"Failed to send message {i}/{messageCount}. ID: {message.Id}",
-                            new Exception("Send failed"));
+                        logger.LogError($"Failed to send message {i}/{messageCount} to topic '{topic}'. ID: {message.Id}", ex);
                     }
-
-                    if (i % 100 == 0)
-                    {
-                        Console.WriteLine(
-                            $"Progress: {i}/{messageCount} messages sent. Success: {successCount}, Failed: {failCount}");
-                    }
-
-                    await Task.Delay(100); // Rate limiting
                 }
 
-                Console.WriteLine("\nFinished sending messages!");
-                Console.WriteLine($"Total Success: {successCount}");
-                Console.WriteLine($"Total Failed: {failCount}");
-                logger.LogInfo($"Completed sending messages. Success: {successCount}, Failed: {failCount}");
+                if (i % 100 == 0)
+                {
+                    var progress = (i * topics.Count);
+                    Console.WriteLine($"Progress: {progress}/{totalMessages} messages sent. Success: {successCount}, Failed: {failCount}");
+                }
+
+                await Task.Delay(100); // Rate limiting
             }
+
+            Console.WriteLine("\nFinished sending messages!");
+            Console.WriteLine($"Total Success: {successCount}");
+            Console.WriteLine($"Total Failed: {failCount}");
+            logger.LogInfo($"Completed sending messages. Success: {successCount}, Failed: {failCount}");
         }
         catch (Exception ex)
         {
@@ -112,7 +108,6 @@ internal static class Program
         }
         finally
         {
-            producer?.Dispose();
             logger?.LogInfo("Producer application shutting down");
         }
     }

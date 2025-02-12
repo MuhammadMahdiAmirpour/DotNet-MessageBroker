@@ -117,7 +117,7 @@ public class DefaultConsumer : ThreadedConsumerBase
         }
     }
 
-    protected override async Task<bool> ProcessMessageAsync(IMessage message)
+    public override async Task<bool> ProcessMessageAsync(IMessage message)
     {
         if (!_isRegistered)
         {

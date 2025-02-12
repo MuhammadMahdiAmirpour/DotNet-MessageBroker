@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <EnableDynamicLoading>true</EnableDynamicLoading>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\MessageBroker.Core\MessageBroker.Core.csproj" />
+    </ItemGroup>
+
+    <Target Name="CopyPluginToOutput" AfterTargets="Build">
+        <Copy SourceFiles="$(TargetPath)"
+              DestinationFolder="../MessageBroker.Producer.App/bin/Debug/net9.0/plugins" />
+    </Target>
+
+</Project>
