@@ -9,6 +9,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\MessageBroker.Core\MessageBroker.Core.csproj" />
+        <ProjectReference Include="..\MessageBroker.Producer.Library\MessageBroker.Producer.Library.csproj" />
     </ItemGroup>
 
     <Target Name="CopyPluginToOutput" AfterTargets="Build">

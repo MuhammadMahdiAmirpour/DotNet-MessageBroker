@@ -1,47 +1,23 @@
 using System.Collections.Concurrent;
 using MessageBroker.Core.Interfaces;
-using MessageBroker.Core.Models;
 using MessageBroker.Logging;
 
 namespace MessageBroker.API.Services;
 
 public class MessageBrokerServer : IMessageBrokerServer
 {
-    private readonly IMessageStorage _storage;
     private readonly IMyCustomLogger _logger;
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, ConsumerInfo>> _consumers;
     private readonly ConcurrentDictionary<string, ConcurrentQueue<IMessage>> _messageQueues;
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, HashSet<Guid>>> _processedMessages;
     private volatile bool _isRunning;
 
-    public MessageBrokerServer(IMessageStorage storage, IMyCustomLogger logger)
+    public MessageBrokerServer(IMyCustomLogger logger)
     {
-        _storage = storage ?? throw new ArgumentNullException(nameof(storage));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _consumers = new ConcurrentDictionary<string, ConcurrentDictionary<string, ConsumerInfo>>();
         _messageQueues = new ConcurrentDictionary<string, ConcurrentQueue<IMessage>>();
         _processedMessages = new ConcurrentDictionary<string, ConcurrentDictionary<string, HashSet<Guid>>>();
-        
-        // Auto-start the server
-        StartAsync().GetAwaiter().GetResult();
-    }
-
-    private async Task LoadStoredMessages()
-    {
-        try
-        {
-            var messages = await _storage.LoadAllMessagesAsync();
-            foreach (var item in messages)
-            {
-                var queue = _messageQueues.GetOrAdd(item.Topic, _ => new ConcurrentQueue<IMessage>());
-                queue.Enqueue(item.Message);
-            }
-            _logger.LogInfo($"Loaded {messages.Count()} messages from storage");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError("Failed to load messages from storage", ex);
-        }
     }
 
     public async Task StartAsync()
@@ -197,17 +173,8 @@ public class MessageBrokerServer : IMessageBrokerServer
         try
         {
             _logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Publishing message {message.Id} to topic {topic}");
-
             var queue = _messageQueues.GetOrAdd(topic, _ => new ConcurrentQueue<IMessage>());
             queue.Enqueue(message);
-
-            var item = new MessageStorageItem
-            {
-                Topic = topic,
-                Message = message
-            };
-
-            await _storage.SaveMessageAsync(item);
             _logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Message {message.Id} published successfully to topic {topic}");
             return true;
         }
@@ -230,18 +197,12 @@ public class MessageBrokerServer : IMessageBrokerServer
                 return Enumerable.Empty<IMessage>();
             }
 
-            // Get all messages for the topic
-            var messages = queue.ToList();
-
-            // Track processed messages per consumer group
+            var messages = queue.ToList().OrderBy(m => m.Timestamp).ToList();
             var processedMessageIds = _processedMessages
                 .GetOrAdd(topic, _ => new ConcurrentDictionary<string, HashSet<Guid>>())
                 .GetOrAdd(consumerGroup ?? "", _ => new HashSet<Guid>());
 
-            // Filter messages that haven't been processed by this consumer group
             var unprocessedMessages = messages.Where(m => !processedMessageIds.Contains(m.Id)).ToList();
-
-            // Mark messages as processed for this consumer group
             foreach (var message in unprocessedMessages)
             {
                 processedMessageIds.Add(message.Id);

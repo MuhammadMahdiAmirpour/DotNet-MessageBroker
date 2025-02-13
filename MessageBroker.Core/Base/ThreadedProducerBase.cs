@@ -25,7 +25,7 @@ namespace MessageBroker.Core.Base
             return await ProduceMessageAsync(message);
         }
 
-        protected abstract Task<bool> ProduceMessageAsync(IMessage message);
+        public abstract Task<bool> ProduceMessageAsync(IMessage message);
 
         public abstract Task<bool> IsConnectedAsync();
 

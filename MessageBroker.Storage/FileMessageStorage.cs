@@ -12,6 +12,7 @@ public class FileMessageStorage : IMessageStorage
     private readonly IMyCustomLogger _logger;
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, IMessage>> _messageCache;
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, HashSet<Guid>>> _consumedMessages;
+    private readonly ConcurrentDictionary<(string Topic, string ConsumerGroup), int> _messageProgress;
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly object _syncLock = new();
 
@@ -21,6 +22,7 @@ public class FileMessageStorage : IMessageStorage
         _storagePath = Path.Combine(AppContext.BaseDirectory, "data", "messages");
         _messageCache = new ConcurrentDictionary<string, ConcurrentDictionary<Guid, IMessage>>();
         _consumedMessages = new ConcurrentDictionary<string, ConcurrentDictionary<string, HashSet<Guid>>>();
+        _messageProgress = new ConcurrentDictionary<(string Topic, string ConsumerGroup), int>();
         _jsonOptions = new JsonSerializerOptions 
         { 
             WriteIndented = true,
@@ -29,6 +31,85 @@ public class FileMessageStorage : IMessageStorage
             
         Directory.CreateDirectory(_storagePath);
         LoadMessagesFromDisk();
+        LoadProgressFromDisk();
+    }
+
+    private void LoadProgressFromDisk()
+    {
+        try
+        {
+            var progressFile = Path.Combine(_storagePath, "progress.json");
+            if (!File.Exists(progressFile)) return;
+        
+            var json = File.ReadAllText(progressFile);
+            var progress = JsonSerializer.Deserialize<Dictionary<string, int>>(json, _jsonOptions);
+            if (progress == null) return;
+        
+            foreach (var kvp in progress)
+            {
+                var parts = kvp.Key.Split(':');
+                if (parts.Length == 2)
+                {
+                    _messageProgress[(parts[0], parts[1])] = kvp.Value;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error loading progress from disk: {ex.Message}", ex);
+        }
+    }
+
+    private async Task SaveProgressToDisk()
+    {
+        try
+        {
+            var progressFile = Path.Combine(_storagePath, "progress.json");
+            var progress = _messageProgress.ToDictionary(
+                kvp => $"{kvp.Key.Topic}:{kvp.Key.ConsumerGroup}", 
+                kvp => kvp.Value);
+            var json = JsonSerializer.Serialize(progress, _jsonOptions);
+            await File.WriteAllTextAsync(progressFile, json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error saving progress to disk: {ex.Message}", ex);
+        }
+    }
+
+    private int GetTotalMessageCount(string topic)
+    {
+        return _messageCache.TryGetValue(topic, out var cache) ? cache.Count : 0;
+    }
+
+    public async Task<int> GetLastProcessedMessageNumber(string topic, string consumerGroup)
+    {
+        return _messageProgress.GetOrAdd((topic, consumerGroup), 0);
+    }
+
+    public async Task UpdateProgress(string topic, string consumerGroup, int messageNumber)
+    {
+        _messageProgress.AddOrUpdate((topic, consumerGroup), messageNumber, (_, _) => messageNumber);
+        await SaveProgressToDisk();
+    } 
+
+    public async Task ClearTopicStorage(string topic)
+    {
+        var topicProgress = _messageProgress.Keys
+            .Where(k => k.Topic == topic)
+            .ToList();
+
+        foreach (var key in topicProgress)
+        {
+            if (_messageProgress.TryGetValue(key, out var progress) && 
+                progress >= GetTotalMessageCount(topic))
+            {
+                await ClearMessagesAsync(topic);
+                _messageProgress.TryRemove(key, out _);
+            }
+        }
+    
+        await SaveProgressToDisk();
     }
 
     private void LoadMessagesFromDisk()
@@ -188,7 +269,6 @@ public class FileMessageStorage : IMessageStorage
                     consumed.Add(message.Id);
                 }
 
-                // Save consumed messages state
                 await SaveConsumedMessagesAsync(topic);
 
                 return messages;
@@ -245,5 +325,20 @@ public class FileMessageStorage : IMessageStorage
         }
 
         return Task.CompletedTask;
+    }
+    
+    // Add this method to FileMessageStorage class
+    public async Task RemoveMessageAsync(string topic, Guid messageId)
+    {
+        var filePath = Path.Combine(_storagePath, topic, $"{messageId}.msg");
+        if (File.Exists(filePath))
+        {
+            File.Delete(filePath);
+            if (_messageCache.TryGetValue(topic, out var topicCache))
+            {
+                topicCache.TryRemove(messageId, out _);
+            }
+            _logger.LogInfo($"Message {messageId} removed from storage in topic {topic}");
+        }
     }
 }

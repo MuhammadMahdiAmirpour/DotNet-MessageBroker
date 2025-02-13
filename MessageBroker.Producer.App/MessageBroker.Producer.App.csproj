@@ -13,4 +13,8 @@
       <ProjectReference Include="..\MessageBroker.Producer.Library\MessageBroker.Producer.Library.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="logs\" />
+    </ItemGroup>
+
 </Project>

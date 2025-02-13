@@ -4,6 +4,7 @@ using MessageBroker.Core.Base;
 using MessageBroker.Core.Interfaces;
 using MessageBroker.Core.Models;
 using MessageBroker.Logging;
+using MessageBroker.Storage;
 
 namespace MessageBroker.Producer.Library;
 
@@ -17,13 +18,14 @@ public class DefaultProducer : ThreadedProducerBase
     private readonly int _maxRetries;
     private readonly string _producerId;
     private readonly string _currentUser;
+    private readonly FileMessageStorage _storage;
     private bool _isInitialized;
     private const int RetryDelayMs = 2000;
 
     public DefaultProducer(IMyCustomLogger logger, string brokerUrl = "http://localhost:5000") : base(logger)
     {
         _brokerUrl = brokerUrl.TrimEnd('/');
-        _currentUser = "MuhammadMahdiAmirpour";
+        _currentUser = Environment.UserName;
         _producerId = $"producer-{_currentUser.ToLower()}-{DateTime.UtcNow:yyyyMMddHHmmss}";
         _isInitialized = false;
 
@@ -36,27 +38,8 @@ public class DefaultProducer : ThreadedProducerBase
             BaseAddress = new Uri(_brokerUrl),
             Timeout = TimeSpan.FromSeconds(30)
         };
-    }
 
-    public async Task InitializeAsync()
-    {
-        if (_isInitialized) return;
-
-        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Starting producer application");
-        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Current User: {_currentUser}");
-        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Producer ID: {_producerId}");
-        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Broker URL: {_brokerUrl}");
-        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Max Retries: {_maxRetries}");
-
-        if (await IsConnectedAsync())
-        {
-            _isInitialized = true;
-            Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Producer initialized successfully");
-        }
-        else
-        {
-            throw new InvalidOperationException("Failed to connect to message broker");
-        }
+        _storage = new FileMessageStorage(logger);
     }
 
     public override async Task<bool> IsConnectedAsync()
@@ -89,13 +72,54 @@ public class DefaultProducer : ThreadedProducerBase
         return false;
     }
 
-    protected override async Task<bool> ProduceMessageAsync(IMessage message)
+    public async Task InitializeAsync()
     {
+        if (_isInitialized) return;
+
+        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Starting producer application");
+        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Current User: {_currentUser}");
+        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Producer ID: {_producerId}");
+        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Broker URL: {_brokerUrl}");
+        Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Max Retries: {_maxRetries}");
+
+        if (await IsConnectedAsync())
+        {
+            _isInitialized = true;
+            await ProcessStoredMessagesAsync();
+            Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Producer initialized successfully");
+        }
+        else
+        {
+            Logger.LogWarning($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Failed to initialize producer - broker unavailable");
+            _isInitialized = false;
+        }
+    }
+
+    private async Task ProcessStoredMessagesAsync()
+    {
+        var messages = await _storage.LoadAllMessagesAsync();
+        foreach (var storedMessage in messages.OrderBy(m => m.Message.Timestamp))
+        {
+            await TrySendMessageAsync(storedMessage.Message);
+        }
+    }
+
+    public override async Task<bool> ProduceMessageAsync(IMessage message)
+    {
+        // Always save the message first
+        await _storage.SaveMessageAsync(new MessageStorageItem { Message = message, Topic = message.Topic });
+
         if (!_isInitialized)
         {
-            throw new InvalidOperationException("Producer must be initialized before sending messages");
+            Logger.LogInfo($"Producer not initialized. Message {message.Id} saved for later delivery");
+            return false;
         }
 
+        return await TrySendMessageAsync(message);
+    }
+
+    private async Task<bool> TrySendMessageAsync(IMessage message)
+    {
         for (int attempt = 1; attempt <= _maxRetries; attempt++)
         {
             try
@@ -121,6 +145,7 @@ public class DefaultProducer : ThreadedProducerBase
                 
                 if (response.IsSuccessStatusCode)
                 {
+                    await _storage.RemoveMessageAsync(message.Topic, message.Id);
                     Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Successfully published message {message.Id} to topic {message.Topic}");
                     return true;
                 }
@@ -157,6 +182,12 @@ public class DefaultProducer : ThreadedProducerBase
         if (disposing)
         {
             _httpClient.Dispose();
+            var storagePath = Path.Combine(AppContext.BaseDirectory, "data", "messages");
+            if (Directory.Exists(storagePath))
+            {
+                Directory.Delete(storagePath, true);
+                Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Storage cleaned up successfully");
+            }
             Logger.LogInfo($"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} - Producer {_producerId} disposed");
         }
         base.Dispose(disposing);

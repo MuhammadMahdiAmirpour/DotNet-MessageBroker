@@ -55,6 +55,11 @@ internal static class Program
                 topic => pluginLoader.GetPlugin("DefaultProducerPlugin", brokerUrl, topic, "producer-group")
             );
 
+            foreach(var producer in producers.Values)
+            {
+                producer.Initialize();
+            }
+
             Console.WriteLine($"\nStarting to send {messageCount} messages to {topics.Count} topics...\n");
             var successCount = 0;
             var failCount = 0;
